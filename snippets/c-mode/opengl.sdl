@@ -1,0 +1,124 @@
+# name: OpenGL/SDL App Skeleton
+# key: opengl
+# --
+// -*- compile-command: "`(cond ((eq *operating-system* :mac)
+  (concatenate 'string "gcc -L/System/Library/Frameworks/OpenGL.framework/Libraries -I/System/Library/Frameworks/OpenGL.framework/Headers -L/Users/danny/sfw/lib -I/Users/danny/sfw/include -framework Cocoa -lGL -lSDL -lSDLmain -lGLU " (file-name-nondirectory (buffer-file-name)) " -o " (file-name-sans-extension (file-name-nondirectory (buffer-file-name)))))
+  ((eq *operating-system* :unix)
+  (concatenate 'string "gcc -lSDL -lSDLmain -lGL -lGLU " (file-name-nondirectory (buffer-file-name)) " -o " (file-name-sans-extension (file-name-nondirectory (buffer-file-name))))))`" -*-
+#ifdef __linux__
+#include "GL/gl.h"
+#else
+#include "gl.h"
+#endif
+#include "SDL/SDL.h"
+#include "SDL/SDL_opengl.h"
+#include <math.h>
+
+void init_rendering(void);
+void render_scene(void);
+void wait_for_next_frame(unsigned int before, unsigned int after, float ifd);
+
+static const int g_width = ${1:640};
+static const int g_height = ${2:480};
+
+int main(int argc, char *argv[])
+{
+  SDL_Event event;
+  
+  float fps = 30.0f;       // frames per second
+  float ifd = 1000.0f/fps; // inter-frame delay
+  
+  unsigned int before, after, delta, delay;
+  
+  int running;
+  
+  init_rendering();
+  
+  running = 1;
+  
+  while(running)
+  {
+    // handle events
+    while(SDL_PollEvent(&event))
+    {
+      before = SDL_GetTicks();
+      switch(event.type)
+      {
+        case SDL_QUIT:
+          running = 0;
+          break;
+        case SDL_KEYDOWN:
+          switch(event.key.keysym.sym)
+          {
+            case SDLK_q:
+              running = 0;
+              break;
+          }
+          break;
+      }
+    }
+    
+    // render the scene
+    render_scene();
+    
+    // introduce a delay for the next frame.
+    wait_for_next_frame(before, SDL_GetTicks(), ifd);
+    
+    SDL_GL_SwapBuffers();
+  }
+  
+  SDL_Quit();
+  
+  return 0;
+}
+
+void init_rendering(void)
+{
+  SDL_Init(SDL_INIT_EVERYTHING);
+  
+  SDL_GL_SetAttribute( SDL_GL_RED_SIZE, 8 );
+  SDL_GL_SetAttribute( SDL_GL_GREEN_SIZE, 8 );
+  SDL_GL_SetAttribute( SDL_GL_BLUE_SIZE, 8 );
+  SDL_GL_SetAttribute( SDL_GL_ALPHA_SIZE, 8 );
+  SDL_GL_SetAttribute( SDL_GL_BUFFER_SIZE, 32 );
+  SDL_GL_SetAttribute( SDL_GL_DEPTH_SIZE, 16 );
+  SDL_GL_SetAttribute( SDL_GL_DOUBLEBUFFER, 1);
+  
+  SDL_WM_SetCaption("Box", NULL);
+  SDL_SetVideoMode(g_width,g_height,32,SDL_OPENGL);
+  
+  glEnable(GL_DEPTH_TEST);
+  glEnable(GL_BLEND);
+  glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+  glViewport(0,0,g_width,g_height);
+  glMatrixMode(GL_PROJECTION);
+  glLoadIdentity();
+  glFrustum(-1.0, 1.0, -1.0, 1.0, 1.0, 100.0);
+  gluLookAt(0.0f, 0.0f, 5.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0);
+  glMatrixMode(GL_MODELVIEW);
+  glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+}
+
+void render_scene()
+{
+  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+  glMatrixMode(GL_MODELVIEW);
+  glLoadIdentity();
+  glPushMatrix();
+  glColor4f(1.0f, 0.0f, 0.0f, 1.0f);
+
+  $0
+
+  glBegin(GL_TRIANGLES);
+  glVertex3f(-0.75f, -0.75, 0.0f);
+  glVertex3f(0.0f, 0.75f, 0.0f);
+  glVertex3f(0.75f, -0.75f, 0.0f);
+  glEnd();
+
+  glPopMatrix();
+}
+
+void wait_for_next_frame(unsigned int start_ms, unsigned int end_ms, float ifd)
+{
+  SDL_Delay(40);
+}

@@ -1,0 +1,22 @@
+(add-to-list 'load-path "/usr/share/emacs/site-lisp/tex-utils")
+
+(setq
+ djw-clojure-jar-path
+ "/home/danny/Clojure/clojure/clojure.jar"
+ djw-clojure-extra-classpaths
+ (list "." "/home/danny/Clojure/contrib/clojure-contrib.jar"))
+
+(put 'inferior-lisp-program 'installed-lisps '(sbcl clisp))
+
+
+(defun djw-toggle-fullscreen ()
+  ;; taken from http://www.emacswiki.org/emacs/FullScreen#toc5 and renamed
+  ;; so that I can use the same command in the site files for multiple
+  ;; operating systems
+  (interactive)
+  (x-send-client-message nil 0 nil "_NET_WM_STATE" 32
+			 '(2 "_NET_WM_STATE_FULLSCREEN" 0)))
+
+(add-to-list 'load-path "/home/danny/SandBox/go/misc/emacs")
+(add-to-list 'auto-mode-alist '("\\.go$" . go-mode))
+(autoload 'go-mode "go-mode" "Major mode for Go" t)

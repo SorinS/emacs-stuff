@@ -1,0 +1,10 @@
+# name: dbi-query
+# key: dbi-query
+# --
+my ${1:$query} = ${2:$dbh}->prepare('$3') || die $!;
+$1->execute;
+while(my $row = $1->fetchrow_arrayref)
+{
+  $0
+}
+$1->finish;

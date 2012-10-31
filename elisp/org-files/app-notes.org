@@ -1,0 +1,46 @@
+* GNU SCREEN
+  With C-p as command key:
+  C-p H - toggle logging to screenlog.X
+  C-p [ - enter copy/history navigation mode.
+  vi navigation in copy mode, including ? and / for search back/forward.
+  [space] - in copy mode, sets the mark.  Subsequent press copies between mark and point.
+  C-p ] - paste copied text
+  .screenrc - defscrollback X, where X is positive integer of line buffer.
+  
+* EMACS
+  re-build is extremely handy for interactively building a regular expression
+** ORG-MODE
+   orgtbl-mode is pretty handy, allowing org-tables to be embedded in comments
+   and then translated into a format that makes sense in the containing
+   environment (e.g. an HTML table)
+   For HTML, it might look like this:
+
+   <!-- BEGIN RECEIVE ORGTBL books -->
+   <!-- END RECEIVE ORGTBLE books -->
+
+   The above designates where in the environment the translated org table will be inserted.
+   Then, you need to create the org-mode table, in comments:
+
+   <!--
+
+   #+ORGTBL: SEND books orgtbl-to-html
+   | Title        |        Cost |
+   |--------------+-------------|
+   | a book       |       30.00 |
+   | another book |       20.00 |
+   |--------------+-------------|
+   | TOTAL        | [a-formula] |
+   -->
+
+   The SEND identifier ('books' here) must match the RECEIVE clause.
+   orgtbl-to-html is an example of a translation function.
+   - I guess it's possible to write custom ones?
+
+   The formula uses Emacs calc.
+   C-c = to insert a formula that applies to a given column.
+   C-u C-c = to insert a formula that applies to a given cell.
+   Columns are denoted with $x, where x is a digit, starting at 1
+   Rows are denoted with @x, where x is a digit, starting at 1.
+   Not quite sure what @I..@II does yet, but it seems to do the 
+   magic when [a-formula] above is replaced by =vsum(@I..@II)
+   

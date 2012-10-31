@@ -1,0 +1,46 @@
+* 01-Dec-2009
+** Debugged:
+   Huffman tree assembly
+   - problem was the distinction between assignment to an object in a Java array, and an assignment to a non-pointer object in a C++ array.
+     - Java copies object reference, allowing multiple cells to share exactly the same object.
+     - C++ has a default assignment operator to copy the state of the argument into the receiver, resulting in two distinct versions with the same data.
+** Implemented:
+   MC decode for luminance and chrominance.
+   JUnit test suite to push all test streams through the decoder.
+   
+* 02-Dec-2009
+** DONE Book travel to DSTL [3/3]
+   CLOSED: [2009-12-02 Wed 11:30]
+   - [X] Flights
+   - [X] Hotel (Royal Oak again?)
+   - [X] Car
+** Residual encoding overview
+** SIMD methods [3/9]
+   - [X] evInt16s_SIMD_64::Load
+   - [X] evInt16s_SIMD_64::RevHadamardTransform
+   - [X] evInt16s_SIMD_64::Store
+   - [ ] evInt8u_SIMD_64::Apply8x8Delta
+   - [ ] evInt8u_SIMD_64::Apply4x4Delta
+   - [ ] evInt8u_SIMD_64::Apply2x2Delta
+   - [ ] evInt8u_SIMD_64::Apply4x8Delta
+   - [ ] evInt8u_SIMD_64::Apply2x4Delta
+   - [ ] evInt8u_SIMD_64::Apply1x2Delta
+* 03-Dec-2009
+** SIMD methods [4/6]
+   - [X] evInt8u_SIMD_64::Apply8x8Delta
+   - [ ] evInt8u_SIMD_64::Apply4x4Delta
+	 ArrayIndexOutOfBoundsException.  This method crosses object boundaries in order to process several instances together.
+   - [X] evInt8u_SIMD_64::Apply2x2Delta
+   - [X] evInt8u_SIMD_64::Apply4x8Delta
+   - [ ] evInt8u_SIMD_64::Apply2x4Delta
+	 ArrayIndexOutOfBoundsException.  This method crosses object boundaries in order to process several instances together.
+   - [X] evInt8u_SIMD_64::Apply1x2Delta
+* 04-Dec-2009
+** SIMD methods [2/2]
+   - [X] evInt8u_SIMD_64::Apply4x4Delta
+   - [X] evInt8u_SIMD_64::Apply2x4Delta
+
+* 05-Dec-2009
+** TODO Closed test environment for R300 in radio mode.
+** TODO EVC_DecodeBase::DecodeAndStoreLumaWHBlock
+** TODO EVC_DecodeBase::DecodeAndStoreChromaWHBlock

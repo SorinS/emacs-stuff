@@ -1,0 +1,6 @@
+# name: dbi (PostgreSQL)
+# key: dbi-connect
+# --
+use DBD::Pg;
+my $dbh = DBI->connect("dbi:Pg:dbname=${1:db-name}", "${2:username}", "${3:password}") || die $!;
+$0

@@ -1,0 +1,56 @@
+# name: script
+# key: script
+# --
+#!/usr/bin/env perl
+###############################################################################
+#
+=pod
+
+=head1 NAME
+
+=head1 SYNOPSIS
+
+=head1 DESCRIPTION
+
+=head1 AUTHOR
+
+=head1 LICENSE
+
+=head1 API
+
+=cut
+#
+###############################################################################
+
+package ${1:`(or (file-name-sans-extension (buffer-name)) "package name")`};
+
+use Getopt::Long qw(GetOptionsFromArray);
+use Log::Log4perl qw(:levels);
+use Carp;
+use utf8;
+use strict;
+use warnings;
+
+sub main
+{
+  Log::Log4perl->init(\*DATA);
+  my $logger = Log::Log4perl->get_logger;
+  GetOptionsFromArray(\@_,
+                     'debug'   => sub {
+		       $Carp::Verbose = 1;
+                       $logger->level($DEBUG);
+                     },
+                     'verbose' => sub { $logger->level($INFO) });
+  $0
+}
+
+main(@ARGV) unless caller;
+
+1;
+
+__DATA__
+log4perl.rootLogger=WARN,Screen
+log4perl.appender.Screen=Log::Log4perl::Appender::Screen
+log4perl.appender.Screen.layout=PatternLayout
+log4perl.appender.Screen.layout.ConversionPattern=%m%n
+log4perl.appender.Screen.utf8=1

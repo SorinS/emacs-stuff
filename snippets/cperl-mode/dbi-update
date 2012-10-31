@@ -1,0 +1,7 @@
+# name: dbi-update
+# key: dbi-update
+# --
+my ${1:$update} = ${2:$dbh}->prepare('$3'} || die $!;
+$1->bind_param(1,$4);
+$1->execute;
+$0

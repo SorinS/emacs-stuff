@@ -1,0 +1,35 @@
+# name: webapp
+# key: webapp
+# --
+(ns ${1:`(clojure-namespace-name-for-buffer)`}
+  (:use
+   compojure.core
+   ring.adapter.jetty
+   hiccup.core
+   [ring.middleware.params :only [wrap-params]]
+   [ring.middleware.reload-modified])
+  (:import [java.net URLEncoder URLDecoder]
+           [java.io File])
+ (:require [compojure.route :as route]
+      	   [ring.util.response :as http]
+           [clojure.string :as string]))
+
+(defn- index-page []
+  (html
+    [:html
+      [:head
+        [:title "${2:AppName}"]]
+      [:body
+        [:h1 "Hello, world!"]]]))
+
+(defn -main [& args]
+  (defroutes main-routes
+    $0
+    (GET "/" [] (index-page))
+    (route/files "/" { :root "./static"})
+    (route/not-found (html [:h1 "Page Not Found"])))
+  (run-jetty
+    (-> main-routes
+        (wrap-params)
+        (wrap-reload-modified ["src"]))
+    {:port 8080}))

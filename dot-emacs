@@ -1,0 +1,836 @@
+(defvar *operating-system*
+  (cond ((not (null (getenv "SYSTEMROOT"))) :windows)
+        ((string-match "^/Users/" (getenv "HOME")) :mac)
+        (t :unix)))
+(defvar *have-gtags* nil)
+(defvar *djw-emacs-root* (concat (getenv "HOME") "/Emacs"))
+(require 'cl)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Some adjustments for where Emacs expects to find things (custom elisp files)
+;; and where it should put them (I don't want backup files littering the
+;; filesystem).
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(setq custom-file "~/.emacs-custom.el")
+(load custom-file 'noerror)
+
+(defun elisp-library-path (name)
+  (expand-file-name (concat *djw-emacs-root* "/elisp/" name)))
+
+(setq load-path (append load-path
+			(mapcar #'elisp-library-path
+				'(""
+				  "cedet-1.1"
+				  "slime"
+				  "org-7.4/lisp"
+				  "muse/lisp"
+				  "darkroom"
+				  "ruby"
+				  "python"
+				  "yasnippet"
+				  "nxml-mode"
+				  "nxhtml"
+				  "remember"
+				  "magit"
+				  "git-emacs"
+				  "clojure/clojure-mode"
+				  "clojure/swank-clojure"
+				  "clojure/swank-clojure/src/emacs"
+				  "scala-mode"
+				  "distel/elisp"
+				  "color-theme-6.6.0"
+				  "color-theme-6.6.0/themes"
+				  "ace-jump"
+				  "mark-multiple"
+				  "multiple-cursors"
+				  "autocomplete"
+				  "jump-char"
+				  "popup"
+				  "expand-region"
+				  "speedbar"
+				  "sandbox"))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Find the gtags executable and, if it's there, add its elisp directory to
+;; the load path.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(let ((gtags-program (executable-find "gtags")))
+  (if gtags-program
+      (let ((gtags-directory
+             (replace-regexp-in-string
+              "bin/gtags\\(.exe\\)*$"
+              "share/gtags/"
+              gtags-program)))
+        (add-to-list 'load-path gtags-directory)
+        (setq *have-gtags* t))))
+
+; Load CEDET.
+;; See cedet/common/cedet.info for configuration details.
+;; IMPORTANT: For Emacs >= 23.2, you must place this *before* any
+;; CEDET component (including EIEIO) gets activated by another
+;; package (Gnus, auth-source, ...).
+;; (load-file (elisp-library-path "cedet-1.1/common/cedet.el"))
+
+;; Enable EDE (Project Management) features
+;; (global-ede-mode 1)
+
+;; Enable EDE for a pre-existing C++ project
+;; (ede-cpp-root-project "NAME" :file "~/myproject/Makefile")
+
+
+;; Enabling Semantic (code-parsing, smart completion) features
+;; Select one of the following:
+
+;; * This enables the database and idle reparse engines
+;; (semantic-load-enable-minimum-features)
+
+;; * This enables some tools useful for coding, such as summary mode,
+;;   imenu support, and the semantic navigator
+;; (semantic-load-enable-code-helpers)
+
+;; * This enables even more coding tools such as intellisense mode,
+;;   decoration mode, and stickyfunc mode (plus regular code helpers)
+;; (semantic-load-enable-gaudy-code-helpers)
+
+;; * This enables the use of Exuberant ctags if you have it installed.
+;;   If you use C++ templates or boost, you should NOT enable it.
+;; (semantic-load-enable-all-exuberent-ctags-support)
+;;   Or, use one of these two types of support.
+;;   Add support for new languages only via ctags.
+;; (semantic-load-enable-primary-exuberent-ctags-support)
+;;   Add support for using ctags as a backup parser.
+;; (semantic-load-enable-secondary-exuberent-ctags-support)
+
+;; Enable SRecode (Template management) minor-mode.
+;; (global-srecode-minor-mode 1)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Ok, normally I insist on using autoloads instead of requires (to avoid
+;; slowing down startup times), but ido-mode is an exception, as it's useful
+;; regardless of the mode we're in
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(require 'ido)
+(ido-mode t)
+(setq ido-enable-flex-matching t)
+
+(require 'ace-jump-mode)
+(define-key global-map (kbd "C-c SPC") 'ace-jump-mode)
+
+(require 'key-chord)
+(key-chord-mode 1)
+
+(require 'jump-char)
+(key-chord-define-global "fg" 'jump-char-forward)
+(define-key global-map (kbd "C-c C-f") 'jump-char-forward)
+
+(require 'inline-string-rectangle)
+(global-set-key (kbd "C-x r t") 'inline-string-rectangle)
+
+(require 'mark-more-like-this)
+(global-set-key (kbd "C-<") 'mark-previous-like-this)
+(global-set-key (kbd "C->") 'mark-next-like-this)
+(global-set-key (kbd "C-M-m") 'mark-more-like-this)
+(global-set-key (kbd "C-*") 'mark-all-like-this)
+
+(require 'expand-region)
+(global-set-key (kbd "C-=") 'er/expand-region)
+(global-set-key (kbd "C--") 'er/contract-region)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; ibuffer stuff.  Use ibuffer instead of list-buffers.  If the mode is
+;; already ibuffer-mode, and it's invoked with a prefix argument, enhance by
+;; toggling the visibility of buffers that aren't backed by files
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(require 'ibuffer)
+
+(defadvice ibuffer (around toggle-non-file-buffers activate)
+  (if (and current-prefix-arg (eq major-mode 'ibuffer-mode))
+      (djw-ibuffer-toggle-transient-files)
+      ad-do-it))
+
+(defun djw-ibuffer-toggle-transient-files ()
+  (interactive)
+  (let ((clean (remove-if (lambda (x) (string= x "\\*.+\\*"))
+                          ibuffer-tmp-hide-regexps)))
+    (if (equal clean ibuffer-tmp-hide-regexps)
+        (add-to-list 'ibuffer-tmp-hide-regexps "\\*.+\\*")
+        (setq ibuffer-tmp-hide-regexps clean))
+    (ibuffer-update nil)))
+
+(global-set-key (kbd "C-x C-b") 'ibuffer)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Backups and auto-saves are useful, but I don't like them cluttering up
+;; the filesystem, and so stuff them in ~/elisp/eback/.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(setq backup-directory-alist `(("\\.*$" . ,(elisp-library-path "eback"))))
+
+(defun auto-save-file-name-p (filename)
+  (string-match "^#.*#$" (file-name-nondirectory filename)))
+
+(defun make-auto-save-file-name ()
+  (concat
+   (elisp-library-path "eback/")
+   (if buffer-file-name
+       (concat "#" (file-name-nondirectory buffer-file-name) "#")
+       (expand-file-name
+	(concat "#%" (buffer-name) "#")))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Machine Dependent Stuff.  Try to keep this to a minimum.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(load "~/.emacs-site.el" 'noerror) ;; Machine-specific options
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; OS Dependent Stuff.  Marginally more acceptable than the machine specific
+;; stuff above, but try to keep it small.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(when (and (eq *operating-system* :mac)
+           (boundp 'ns-alternate-modifier)
+           (boundp 'ns-command-modifier))
+  (setq
+   ns-alternate-modifier nil
+   ns-command-modifier 'meta))
+
+(defadvice flyspell-mode (around only-enable-if-spellchecker-installed activate)
+  (if (and (ad-get-arg 0)
+	   (boundp 'ispell-program-name)
+	   (executable-find ispell-program-name))
+      ad-do-it
+      nil))
+
+(eval-after-load "flyspell"
+  '(progn
+    (setq ispell-program-name "aspell")
+    (ispell-change-dictionary "british")))
+
+(eval-after-load "vc-git"
+  '(require 'magit))
+
+(eval-after-load "hideshowvis"
+  '(progn
+    (local-set-key (kbd "<backtab>") 'hs-show-block)))
+
+(eval-after-load "multi-web-mode"
+  '(progn
+    (setq mweb-default-major-mode 'nxhtml-mode)
+    (setq mweb-tags '((php-mode "<\\?php\\|<\\? \\|<\\?=" "\\?>")
+		      (js-mode "<script +\\(type=\"text/javascript\"\\|language=\"javascript\"\\)[^>]*>" "</script>")
+		      (css-mode "<style +type=\"text/css\"[^>]*>" "</style>")))
+    (setq mweb-filename-extensions '("php" "htm" "html" "ctp" "phtml" "php4" "php5"))
+    (multi-web-global-mode 1)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Some things are inviolate, and apply across modes.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(when window-system
+  (set-scroll-bar-mode 'right)
+  (tool-bar-mode 0))
+
+(setq
+ user-full-name "Danny Woods"
+ user-mail-address "dannywoodz@yahoo.co.uk"
+ host-name (downcase (system-name))
+ initial-scratch-message nil)
+
+(setq inhibit-splash-screen t)
+(setq inhibit-startup-echo-area-message (user-login-name))
+(delete-selection-mode t)
+(mouse-wheel-mode t)
+(column-number-mode t)
+(show-paren-mode t)
+(setq show-trailing-whitespace t)
+(setq c-basic-indent 2)
+(setq c-basic-offset 2)
+(setq tab-width 2)
+(setq indent-tabs-mode nil)
+(global-font-lock-mode t)
+(setq require-final-newline t)
+
+;; Appearance
+(set-background-color "black")
+(set-foreground-color "lightgreen")
+(set-cursor-color "firebrick")
+(blink-cursor-mode 0)
+
+(global-set-key (kbd "M-i") 'imenu)
+(global-set-key (kbd "M-g") 'goto-line)
+(global-set-key (kbd "C-x C-j") 'eval-print-last-sexp)
+(global-set-key (kbd "C-S-y") 'browse-kill-ring)
+(global-set-key [C-return] 'hippie-expand)
+(autoload 'browse-kill-ring "browse-kill-ring" "Kill ring browser" t)
+(fset 'yes-or-no-p 'y-or-n-p)
+(put 'set-goal-column 'disabled nil)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; When I save a buffer that's code, I *never* want to see tabs in it
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defadvice save-buffer (before remove-tabs activate)
+  (if (string-match
+       "\\.\\(cpp\\|c\\|pl\\|pm\\|rb\\|h\\|hs\\|lisp\\|el\\|erl\\|py\\|xml\\|html\\|clj\\)\$"
+       (buffer-file-name))
+      (save-excursion (untabify (point-min) (point-max)))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; When switching buffers, don't create a buffer just because I've hit return
+;; when the name has only partially completed (unless I really say so)
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defadvice switch-to-buffer (around prompt-if-nonexistent)
+  (if (or (get-buffer (ad-get-arg 0))
+          (y-or-n-p "Create? "))
+      ad-do-it
+      nil))
+(ad-activate 'switch-to-buffer)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Set up what should be loaded when files of various types are loaded in.
+;; This doesn't apply to Perl, but it still needs to be fooled into using
+;; CPerl mode rather than plain old perl mode.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defalias 'perl-mode 'cperl-mode)
+(add-to-list 'auto-mode-alist '("\\.rb$" . ruby-mode))
+(add-to-list 'auto-mode-alist '("\\.py$" . python-mode))
+(add-to-list 'auto-mode-alist '("\\.xml$" . nxml-mode))
+(add-to-list 'auto-mode-alist '("\\.html?$" . html-mode))
+(add-to-list 'auto-mode-alist '("\\.org\\(_archive\\)?$" . org-mode))
+(add-to-list 'auto-mode-alist '("\\.erl$" . erlang-mode))
+(add-to-list 'auto-mode-alist '("\\.hs$" . haskell-mode))
+(add-to-list 'auto-mode-alist '("\.muse$" . muse-mode))
+(add-to-list 'auto-mode-alist '("dot-emacs" . emacs-lisp-mode))
+(add-to-list 'auto-mode-alist '("\.clj$" . clojure-mode))
+(add-to-list 'auto-mode-alist '("\.scala$" . scala-mode))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; I find it useful to run a compilation check over Ruby and Perl scripts each
+;; time such a file is saved.  It's quick, and highlights any typos early.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defun djw-after-save-hook ()
+  ;; Only run these hooks if the file is local: there's no local file for
+  ;; remote edits, and no guarantee that it would even make sense on the
+  ;; client even if we saved a temporary copy to check against.
+  ;; For Ruby, if the class is a unit test class, run it instead of compiling.
+  (unless (file-remote-p (buffer-file-name))
+    (let ((compilation-ask-about-save nil))
+      (cond ((string-match "\\.rb$" (buffer-file-name))
+             (if (string-match "require ['\"]test/unit['\"]" (buffer-string))
+                 (compile (format "ruby \"%s\"" (buffer-file-name)))
+                 (compile (format "ruby -c \"%s\"" (buffer-file-name)))))
+            ((string-match "\\.pl$" (buffer-file-name))
+             (compile (format "perl -c \"%s\"" (buffer-file-name))))))))
+(setq compilation-window-height 10)
+(setq compilation-scroll-output t)
+(setq after-save-hook '(djw-after-save-hook))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Autoloads for the programming modes required by the above.  The nice thing
+;; about autoloading is that these files are not actually pulled in until the
+;; first file of the appropriate type is loaded, saving on startup times for
+;; quick scripts.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(autoload 'ruby-mode "ruby-mode" "Major mode for editing Ruby code" t)
+(autoload 'python-mode "python-mode" "Major mode for editing Python code" t)
+(autoload 'paredit-mode "paredit" "Minor mode for parenthesis matching" t)
+(autoload 'nxml-mode "nxml-mode" "Major mode for editing HTML & XML" t)
+(autoload 'slime "slime" "Superior Lisp Interaction Mode for Emacs" t)
+(autoload 'slime-mode "slime" "Superior Lisp Interaction Mode for Emacs" t)
+(autoload 'org-mode "org" "Organizer and day planner" t)
+(autoload 'erlang-mode "erlang" "Major mode for Erlang" t)
+(autoload 'haskell-mode "haskell-mode" "Major mode for Haskell" t)
+(autoload 'muse "muse-mode" "Muse mode for Emacs" t)
+(autoload 'muse-mode "muse-mode" "Muse mode for Emacs" t)
+(autoload 'clojure-mode "clojure-mode" "Major mode for Clojure" t)
+(autoload 'scala-mode "scala-mode" "Major mode for Scala" t)
+(autoload 'slime-require "slime" "Superior Lisp Interaction Mode for Emacs" t)
+
+(eval-after-load "muse"
+  '(progn
+    (require 'muse-mode)
+    (require 'muse-latex)))
+
+(eval-after-load "ecb-upgrade"
+  '(require 'cedet))
+
+(eval-after-load "ecb"
+  '(progn
+    (setq
+     truncate-partial-width-windows nil
+     ecb-tip-of-the-day nil
+     ecb-windows-width 0.2)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; I find org-mode to be very useful, and like to keep my org files in the
+;; elisp tree so that they're versioned along with the other emacs stuff
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defun org-find-file ()
+  (interactive)
+  (require 'org)
+  (let ((default-directory org-directory))
+    (call-interactively
+     (if (fboundp 'ido-find-file)
+         'ido-find-file
+         'find-file))))
+(global-set-key "\C-x\C-o" 'org-find-file)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; These functions conform to a habit that using VisualWorks Smalltalk has
+;; built up: hitting escape and then a common wrapper character like
+;; a double quote, quote, opening parenthesis, etc. wraps the current
+;; selection in those characters, being smart enough to know that the
+;; closing character for a '(' is a ')'
+;; Without a selection, it should just wrap current position in the
+;; appropriate character
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defun djw-wrap-selection-in (a-character &optional
+                              a-closing-character
+                              escape-intermediates)
+  (if mark-active
+      (save-excursion
+        (let ((position (min (point)
+                             (mark)))
+              (end (max (point)
+                        (mark))))
+
+          ;; First, go to the beginning of the selection and insert the
+          ;; opening character
+
+          (goto-char position)
+          (insert a-character)
+
+          ;; Next, walk through the space until the end point.  This only
+          ;; involves real work if escaping of matching characters in the
+          ;; range is required, at which point the insertion of a new character
+          ;; requires that the end-point be moved appropriately (otherwise
+          ;; we'd not traverse the whole range
+          (while (<= (point) end)
+            (when (and
+                   escape-intermediates
+                   (char-equal a-character (char-after (point))))
+	      (insert "\\")
+	      (setq end (1+ end)))
+            (unless (eobp) (forward-char 1)))
+
+          ;; Finally, insert the closing character, which unless specified is
+          ;; just the opening character.
+
+          (insert (or a-closing-character a-character))))
+
+      (progn ;; The mark was not active: surround the current position
+        (insert a-character)
+        (insert (if a-closing-character a-closing-character a-character))
+        (backward-char 1))))
+
+(defun djw-wrap-selection-in-quotes ()
+  (interactive)
+  (djw-wrap-selection-in ?'))
+(defun djw-wrap-selection-in-double-quotes ()
+  (interactive)
+  (djw-wrap-selection-in ?\" nil t))
+(defun djw-wrap-selection-in-parentheses ()
+  (interactive)
+  (djw-wrap-selection-in ?\( ?\)))
+(defun djw-wrap-selection-in-brackets ()
+  (interactive)
+  (djw-wrap-selection-in ?\[ ?\]))
+(defun djw-wrap-selection-in-curlies ()
+  (interactive)
+  (djw-wrap-selection-in ?{ ?}))
+
+(global-set-key (kbd "M-\"") 'djw-wrap-selection-in-double-quotes)
+(global-set-key (kbd "M-'") 'djw-wrap-selection-in-quotes)
+(global-set-key (kbd "M-{") 'djw-wrap-selection-in-curlies)
+(global-set-key (kbd "M-[") 'djw-wrap-selection-in-brackets)
+(global-set-key (kbd "M-(") 'djw-wrap-selection-in-parentheses)
+
+(defun djw-insert-current-date()
+  (interactive)
+  (insert (format-time-string "%d-%b-%Y")))
+
+;; djw-trim is actually just org-trim from org-mode, but I want it to
+;; be available without requiring org-mode.
+
+(defun djw-trim (s)
+  "Remove whitespace at beginning and end of string."
+  (if (string-match "\\`[ \t\n\r]+" s) (setq s (replace-match "" t t s)))
+  (if (string-match "[ \t\n\r]+\\'" s) (setq s (replace-match "" t t s)))
+  s)
+
+(defun parent-paths-of (pathname)
+  "Return a list of directories from PATHNAME, in receding order.
+\"/usr/local/bin/foo\" => '(\"/usr/local/bin/\" \"/usr/local/\" \"/usr/\" \"/\").  All directory names end with a slash"
+  (do ((results nil
+		(cons (concatenate 'string "/" (mapconcat #'identity (reverse segments) "/") "/")
+		      results))
+       (segments (funcall (if (file-directory-p pathname)
+			      #'identity
+			      #'cdr)
+			  (reverse (split-string (expand-file-name pathname) "/" t)))
+		 (cdr segments)))
+      ((not segments)
+       (nreverse (cons "/" results)))))
+
+(defun ancestor-directory-containing (filename &optional starting-directory  append-filename)
+  "Find which ancestor directory of STARTING-DIRECTORY contains FILENAME.
+STARTING-DIRECTORY, if not specified, is `default-directory'.  Only the directory name is returned unless APPEND-FILENAME is t, in which case FILENAME is appended.  Evaluates to NIL if no match is found.  FILENAME may itself be a directory."
+  (let ((directory
+	 (car (remove-if-not #'(lambda (directory)
+				 (file-attributes
+				  (concatenate 'string directory "/" filename)))
+			     (parent-paths-of (or starting-directory
+						  default-directory))))))
+    (if (and directory append-filename)
+	(concatenate 'string directory "/" filename)
+	directory)))
+
+(defvar *last-maven-build-target* "compile"
+  "The default target for `maven-build' to use")
+(defvar *maven-build-targets* (list "compile" "test" "package")
+  "Usable targets for `maven-build'")
+
+(defun maven-build (build-target)
+  "Run maven (mvn) with the specified BUILD-TARGET.
+BUILD-TARGET should be something that can be fed to the mvn executable (e.g. \"compile\", \"tomcat:redeploy\", etc.)"
+  (interactive (list (completing-read "Build target: "
+				      *maven-build-targets*
+				      nil nil
+				      *last-maven-build-target*)))
+  (setq *last-maven-build-target* build-target)
+  (let ((default-directory (ancestor-directory-containing "pom.xml")))
+    (if default-directory
+	(compile (concatenate 'string "mvn " build-target)))))
+
+(defun setup-autocompletion ()
+  (interactive)
+  (require 'yasnippet)
+  (setq yas/snippet-dirs
+	(list
+	 (elisp-library-path "../snippets")
+	 (elisp-library-path "yasnippet/snippets")))
+  (yas/initialize)
+  (yas/global-mode 1)
+  (require 'auto-complete)
+  (auto-complete-mode 1)
+  (when *have-gtags*
+    (require 'gtags)
+    (gtags-mode 1)
+    (local-set-key [f11] 'gtags-find-tag-from-here)
+    (local-set-key [f12] 'gtags-find-tag)))
+
+(eval-after-load "shell"
+  '(require 'shell-command))
+
+(eval-after-load "cperl-mode"
+  '(progn
+    (setq
+     cperl-merge-trailing-else nil
+     cperl-continued-statement-offset 0
+     cperl-extra-newline-before-brace t
+     cperl-indent-parens-as-block t)
+    (defun installed-perl-version ()
+      (interactive)
+      (let ((perl (executable-find "perl")))
+	(if perl
+	    (shell-command-to-string (concatenate 'string perl " -e '($v = $]) =~ s/(?<!\\.)(?=(\\d{3})+$)/./g; print $v;'")))))
+    (defun use-installed-perl-version ()
+      (interactive)
+      (let ((perl-version (installed-perl-version)))
+	(if perl-version
+	    (save-excursion
+	      (beginning-of-buffer)
+	      (let ((case-fold-search nil))
+		(re-search-forward "^use [a-z]" (point-max) t)
+		(beginning-of-line)
+		(open-line 1)
+		(insert (concatenate 'string "use v" perl-version ";"))))
+	    (message "Couldn't determine perl version"))))
+    (add-hook 'cperl-mode-hook 'setup-autocompletion)))
+
+(eval-after-load "org"
+  '(progn
+    (require 'remember)
+    (add-hook 'remember-mode-hook 'org-remember-apply-template)
+    (org-remember-insinuate)
+    (setq
+     org-cycle-include-plain-lists nil
+     org-hide-leading-stars t
+     org-default-notes-file (elisp-library-path "org-notes/")
+     org-directory (elisp-library-path "org-files/")
+     org-todo-keywords '((sequence "TODO(t)" "IN PROGRESS(p)"  "AWAITING FEEDBACK(f)" "|" "CANCELLED(c)" "DONE(d)"))
+     org-log-done 'note
+     org-log-into-drawer t)))
+
+
+(eval-after-load "gnus"
+  '(setq
+    nntp-authinfo-file "~/.authinfo"
+    gnus-nntp-server "news.sunsite.dk"))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Custom hooks for the various modes.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; To get a Lisp dialect to show up here, ensure that it's in the list attached
+;; to 'inferior-lisp-program via the 'installed-lisps symbol
+;; i.e. (get 'inferior-lisp-program 'installed-lisps) -> '("sbcl" "clisp")
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(setq lisp-indent-function 'common-lisp-indent-function)
+
+(defun clojure ()
+  (interactive)
+  (clojure-mode)
+  (require 'slime)
+  (slime-connect "localhost" 4005))
+
+(eval-after-load "slime"
+  '(progn
+    (slime-setup '(slime-repl slime-fuzzy slime-fancy))
+    (setq
+     common-lisp-hyperspec-root "http://www.lispworks.com/documentation/HyperSpec/"
+     slime-use-autodoc-mode nil
+     slime-startup-animation nil
+     slime-protocol-version 'ignore
+     slime-complete-symbol-function 'slime-fuzzy-complete-symbol
+     slime-lisp-implementations (mapcar
+				 (lambda (dialect) (list dialect (list (or
+									(get dialect 'program)
+									(symbol-name dialect)))))
+				 (get 'inferior-lisp-program 'installed-lisps)))))
+
+(add-hook 'nxml-mode-hook #'(lambda ()
+			      (require 'rename-sgml-tag)
+			      (local-set-key (kbd "C-c C-r") 'rename-sgml-tag)
+			      (setup-autocompletion)
+			      (nxml-where-mode nil)))
+
+(add-hook 'lisp-mode-hook #'(lambda ()
+                              (paredit-mode t)))
+
+(add-hook 'clojure-mode-hook #'(lambda ()
+				 (defun clojure-namespace-name-for-buffer (&optional buffer)
+				   (combine-and-quote-strings
+				    (let ((collect nil))
+				      (loop
+					 for path-element in (split-string (buffer-file-name buffer) "/" t)
+					 when collect collecting (replace-regexp-in-string "\\.clj$" "" path-element)
+					 if (string-equal path-element "src") do (setf collect t)))
+				    "."))
+                                 (paredit-mode t)))
+
+(eval-after-load "sr-speedbar"
+  '(setq sr-speedbar-right-side nil))
+
+(add-hook 'emacs-lisp-mode-hook #'(lambda () (paredit-mode t)))
+
+(add-hook 'lisp-interaction-mode-hook #'(lambda () (paredit-mode t)))
+
+(add-hook 'log-edit-mode-hook #'(lambda ()
+                                  (flyspell-mode t)))
+
+(add-hook 'dired-mode-hook #'(lambda ()
+                               (require 'dired-x)
+                               (setq dired-omit-files "^\\.?#\\|^\\.[^\\.].*$")
+                               (setq dired-omit-files-p t)))
+
+(add-hook 'text-mode-hook #'(lambda () (flyspell-mode t)))
+
+(defadvice find-file (after no-auto-save-for-sensitive activate)
+  (when (string-match "/Fiction/" (buffer-file-name))
+    (require 'sensitive)
+    (sensitive-mode t)))
+
+(defun set-c-defaults ()
+  (c-set-style "ellemtel")
+  (setq c-basic-offset 2 c-basic-indent 2)
+  (setup-autocompletion))
+
+(add-hook 'c-mode-hook 'set-c-defaults)
+
+(add-hook 'cc-mode-hook 'set-c-defaults)
+
+(add-hook 'c++-mode-hook 'set-c-defaults)
+
+(add-hook 'dired-mode-hook #'(lambda ()
+			       (defun maven-start-project (group-id
+							   artifact-id)
+				 (interactive "sGroup ID:\nsArtifact ID:")
+				 (shell-command
+				  (format "mvn archetype:generate -DgroupId=%s -DartifactId=%s -DarchetypeArtifactId=maven-archetype-quickstart -DinteractiveMode=false"
+					  group-id
+					  artifact-id)))))
+
+(add-hook 'java-mode-hook #'(lambda ()
+			      (set-c-defaults)))
+
+(add-hook 'perl-mode-hook 'set-c-defaults)
+
+(add-hook 'erlang-mode-hook 'setup-autocompletion)
+
+(add-hook 'html-mode-hook #'(lambda ()
+			      (require 'rename-sgml-tag)
+			      (local-set-key (kbd "C-c C-r") 'rename-sgml-tag)
+			      (setup-autocompletion)))
+
+(add-hook 'css-mode-hook 'setup-autocompletion)
+
+(add-hook 'python-mode-hook 'setup-autocompletion)
+
+(add-hook 'ruby-mode-hook 'setup-autocompletion)
+
+(add-hook 'org-mode-hook #'(lambda ()
+                             (toggle-truncate-lines 0)
+                             (flyspell-mode 0)
+                             (hl-line-mode t)
+                             (local-set-key "\C-c\C-r" 'org-remember)
+                             (global-set-key "\C-cl" 'org-store-link)
+                             (global-set-key (kbd "C-c a") 'org-agenda)
+                             (setq org-directory (elisp-library-path "org-files/")
+                                   org-default-notes-file (elisp-library-path "org-files/notes.org")
+				   org-agenda-files  `(,(elisp-library-path "org-files/work.org"))
+                                   remember-annotation-functions '(org-remember-annotation)
+                                   remember-handler-functions '(org-remember-handler)
+                                   org-remember-templates
+                                   `(("TODO" ?t "* TODO %^{Brief Description} %^g\n%?\nAdded: %U"
+                                      ,(elisp-library-path "org-files/todos.org") "TODOs")
+                                     ("CALL" ?c "* TODO Call %^{Call who?}\nContact: %^{Contact Details}\nWhen: %^T\n%?"
+                                      ,(elisp-library-path "org-files/todos.org") "CALLS")
+                                     ("IDEA" ?i "Summary: %^{Summary}\nReference: %^{Link/Reference}\n%?"
+                                      ,(elisp-library-path "org-files/notes.org") "RANDOM THOUGHTS")))))
+
+(add-hook 'slime-mode-hook #'(lambda ()
+                               (slime-setup)
+                               (local-set-key [tab] 'slime-indent-and-complete-symbol)))
+
+(add-hook 'shell-mode-hook
+          (function (lambda()
+            (require 'shell-command)
+            (shell-command-completion-mode)
+            (setq comint-input-sender 'shell-simple-send-override)
+            (local-set-key [down]
+                           (function (lambda()
+                             (interactive)
+                             (if (comint-after-pmark-p)
+                                 (comint-next-input 1)
+                                 (next-line 1)))))
+            (local-set-key [(shift up)] (lambda ()
+                                          (interactive)
+                                          (previous-line 1)))
+            (local-set-key [(shift down)] (lambda ()
+                                            (interactive)
+                                            (next-line 1)))
+            (local-set-key [up]
+                           (function (lambda()
+                             (interactive)
+                             (if (comint-after-pmark-p)
+                                 (comint-previous-input 1)
+                                 (previous-line 1))))))))
+
+;; I almost habitually type 'clear' at random points when using a shell.
+;; Emacs shell mode doesn't really respond too well to the terminal
+;; characters that the shell process sends back. This function, when
+;; registered as the comint-input-sender, treats the string "clear"
+;; specially. It also uses a list of 'bad' commands to start in a separate
+;; process: this stops less, vi and the like from screwing up the buffer.
+
+(defvar *shell-incompatible-commands* (list "vi" "less" "man"))
+
+(defun shell-simple-send-override(proc command)
+  (let ((program (car (split-string command))))
+    (cond ((member program *shell-incompatible-commands*)
+           (setf command (concat "xterm -e " command)))
+          ((string-match "^[[:space:]]*clear[[:space:]]*$" command)
+           (setf command "")
+           (erase-buffer)))
+    (comint-simple-send proc command)))
+
+(put 'upcase-region 'disabled nil)
+(put 'downcase-region 'disabled nil)
+(put 'erase-buffer 'disabled nil)
+(put 'narrow-to-region 'disabled nil)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Emacs is ridiculously customisable when it comes to appearance, but I
+;; generally only care about a few simple configurations
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(defvar *djw-scratchpad-file*
+  (elisp-library-path "local/scratchpad.el")
+  "The name of a scratchpad file that I use for temporary notes.  Kind of a cross-session *scratch* buffer")
+
+(if (file-exists-p *djw-scratchpad-file*)
+    (find-file *djw-scratchpad-file*))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Centre the frame on screen
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(unless (null window-system)
+  (setf screen-width 120)
+  (set-frame-height (selected-frame)
+		    (floor (* 0.95 (/ (display-pixel-height)
+				      (frame-char-height)))))
+  (set-frame-position (selected-frame)
+		      (floor (/ (- (display-pixel-width) (frame-pixel-width))
+				2))
+		      (floor (* 0.02 (display-pixel-height)))))
+
+(defadvice write-file (around write-file-possibly-rename activate)
+  (let ((old-filename (buffer-file-name)))
+    ad-do-it
+    (and current-prefix-arg
+	 old-filename
+	 (file-exists-p old-filename)
+	 (not (string= old-filename (buffer-file-name)))
+	 (delete-file old-filename))))
+
+(defun byte-compile-directory (dir-name elisp-library-finder recursive)
+  "Byte-compile all files in a given directory, optionally recursing into sub-directories.
+dir-name should be the name of an elisp library or a full path to the library.  In the
+former case, elisp-library-finder should be a funtion that takes that library name to
+yield the path.  If recursive is non-nil, descend into sub-directories after byte-compiling
+all .el files in the library directory."
+  (flet ((file-in-directory (filename)
+	   (concatenate 'string directory "/" filename))
+	 (is-elisp-filename (filename)
+	   (and (stringp filename)
+		(string-equal (file-name-extension filename) "el")))
+	 (is-hidden-file (filename)
+	   (and (not (null filename))
+		(string= (subseq filename 0 1) "."))))
+    (let* ((directory (if (null elisp-library-finder) dir-name (funcall elisp-library-finder dir-name)))
+	   (elisp-files (mapcar #'file-in-directory
+				(remove-if-not #'is-elisp-filename
+					       (directory-files directory))))
+	   (sub-directories (if recursive (remove-if-not
+					   #'file-directory-p
+					   (mapcar #'file-in-directory
+						   (remove-if #'is-hidden-file
+							      (directory-files directory)))))))
+      (map nil #'byte-compile-file elisp-files)
+      (map nil #'(lambda (d) (byte-compile-directory d nil recursive)) sub-directories))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Spit out the time taken to load this .emacs.  I get nervous if it takes
+;; longer than about a second.  This needs to be done in an after-init-hook
+;; as the 'after' time used by #'emacs-init-time isn't available until *after*
+;; this .emacs file has completed loading.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(add-hook 'after-init-hook
+	  #'(lambda ()
+	      (message ".emacs loaded in %s" (emacs-init-time))))

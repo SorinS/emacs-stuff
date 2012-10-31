@@ -1,0 +1,5 @@
+CALENDAR
+* DONE Car valet.
+  SCHEDULED: <2008-11-06 Thu> CLOSED: [2008-11-10 Mon 09:25]
+* DONE Meeting with Bryan Savage to discuss pensions.
+  SCHEDULED: <2008-11-06 Thu 10:00> CLOSED: [2008-11-10 Mon 09:25]

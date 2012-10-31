@@ -1,0 +1,13 @@
+# name: OpenGL Display List
+# key: opengl
+# --
+GLuint $1 = glGenLists(1);
+glNewList($1, GL_COMPILE);
+glBegin($2);
+$0
+glEnd();
+glEndList();
+
+glCallList($1);
+
+glDeleteLists($1, 1);

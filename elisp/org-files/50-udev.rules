@@ -1,0 +1,3 @@
+KERNEL=="ttyUSB[0-9]", ATTRS{idProduct}=="2303", ATTRS{idVendor}=="067b", SYMLINK+="gps"
+KERNEL=="ttyUSB[0-9]", KERNELS=="*:1.0", DRIVERS=="option", SYMLINK+="telit-data"
+KERNEL=="ttyUSB[0-9]", KERNELS=="*:1.1", DRIVERS=="option", SYMLINK+="telit-monitor"

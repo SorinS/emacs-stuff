@@ -1,0 +1,8 @@
+classes/
+lib/
+multi-lib/
+*jar
+pom.xml
+.lein-failures
+.lein-deps-sum
+/lein-swank/.lein-plugins/checksum

@@ -1,0 +1,69 @@
+# name: class
+# key: class
+# --
+#!/usr/bin/env perl
+###############################################################################
+#
+=pod
+
+=head1 NAME
+
+=head1 SYNOPSIS
+
+=head1 DESCRIPTION
+
+=head1 AUTHOR
+
+=head1 LICENSE
+
+=head1 API
+
+=cut
+#
+###############################################################################
+
+package ${1:`(or (file-name-sans-extension (buffer-name)) "package name")`};
+
+use Moose;
+use namespace::autoclean;
+use Getopt::Long qw(GetOptionsFromArray);
+use Log::Log4perl qw(:levels);
+use utf8;
+use strict;
+use warnings;
+
+has ${2:attribute} => (
+  is => '${3:ro}',
+  isa => '${4:Str}',
+  required => 1,
+);
+
+sub _run
+{
+  $0
+}
+
+sub main
+{
+  Log::Log4perl->init(\*DATA);
+  my $logger = Log::Log4perl->get_logger;
+  GetOptionsFromArray(\@_,
+                     'debug'   => sub {
+		       $Carp::Verbose = 1;
+                       $logger->level($DEBUG);
+                     },
+                     'verbose' => sub { $logger->level($INFO) });
+  my $instance = $1->new;
+  $instance->_run;
+}
+
+main(@ARGV) unless caller;
+
+1;
+
+__DATA__
+log4perl.rootLogger=INFO,Screen
+log4perl.appender.Screen=Log::Log4perl::Appender::Screen
+log4perl.appender.Screen.layout=PatternLayout
+log4perl.appender.Screen.layout.ConversionPattern=%m%n
+log4perl.appender.Screen.utf8=1

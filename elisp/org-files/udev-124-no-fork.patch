@@ -1,0 +1,142 @@
+diff -Naur old/udev_device.c new/udev_device.c
+--- old/udev_device.c	2008-06-12 06:24:30.000000000 +0100
++++ new/udev_device.c	2008-10-17 10:57:08.000000000 +0100
+@@ -194,14 +194,8 @@
+ 		/* read current database entry; cleanup, if it is known device */
+ 		udev_old = udev_device_init(NULL);
+ 		if (udev_old != NULL) {
+-			udev_old->test_run = udev->test_run;
+-			if (udev_db_get_device(udev_old, udev->dev->devpath) == 0) {
+-				info("device '%s' already in database, cleanup\n", udev->dev->devpath);
+-				udev_db_delete_device(udev_old);
+-			} else {
+-				udev_device_cleanup(udev_old);
+-				udev_old = NULL;
+-			}
++		  udev_device_cleanup(udev_old);
++		  udev_old = NULL;
+ 		}
+ 
+ 		/* create node */
+diff -Naur old/udev_sysfs.c new/udev_sysfs.c
+--- old/udev_sysfs.c	2008-06-12 06:24:30.000000000 +0100
++++ new/udev_sysfs.c	2008-10-17 11:23:18.000000000 +0100
+@@ -343,14 +343,6 @@
+ 	strlcat(path_full, "/", sizeof(path_full));
+ 	strlcat(path_full, attr_name, sizeof(path_full));
+ 
+-	/* look for attribute in cache */
+-	list_for_each_entry(attr_loop, &attr_list, node) {
+-		if (strcmp(attr_loop->path, path) == 0) {
+-			dbg("found in cache '%s'\n", attr_loop->path);
+-			return attr_loop->value;
+-		}
+-	}
+-
+ 	/* store attribute in cache (also negatives are kept in cache) */
+ 	dbg("new uncached attribute '%s'\n", path_full);
+ 	attr = malloc(sizeof(struct sysfs_attr));
+diff -Naur old/udevd.c new/udevd.c
+--- old/udevd.c	2008-06-12 06:24:30.000000000 +0100
++++ new/udevd.c	2008-10-17 11:28:52.000000000 +0100
+@@ -140,6 +140,9 @@
+ 		retval = udev_rules_run(udev);
+ 
+ 	udev_device_cleanup(udev);
++
++	alarm(0); // Clear the set alarm
++
+ 	return retval;
+ }
+ 
+@@ -225,83 +228,18 @@
+ 
+ static void udev_event_run(struct udevd_uevent_msg *msg)
+ {
+-	pid_t pid;
+ 	int retval;
+-
+-	pid = fork();
+-	switch (pid) {
+-	case 0:
+-		/* child */
+-		close(uevent_netlink_sock);
+-		close(udevd_sock);
+-		if (inotify_fd >= 0)
+-			close(inotify_fd);
+-		close(signal_pipe[READ_END]);
+-		close(signal_pipe[WRITE_END]);
+-		logging_close();
+-
+-		logging_init("udevd-event");
+-		setpriority(PRIO_PROCESS, 0, UDEV_PRIORITY);
+-
+-		retval = udev_event_process(msg);
+-		info("seq %llu finished with %i\n", msg->seqnum, retval);
+-
+-		logging_close();
+-		if (retval)
+-			exit(1);
+-		exit(0);
+-	case -1:
+-		err("fork of child failed: %s\n", strerror(errno));
+-		msg_queue_delete(msg);
+-		break;
+-	default:
+-		/* get SIGCHLD in main loop */
+-		info("seq %llu forked, pid [%d], '%s' '%s', %ld seconds old\n",
+-		     msg->seqnum, pid,  msg->action, msg->subsystem, time(NULL) - msg->queue_time);
+-		msg->pid = pid;
+-	}
++	retval = udev_event_process(msg);	
++	info("seq %llu finished with %i\n", msg->seqnum, retval);
++	msg->exitstatus = retval;
++	run_exec_q = 1;
+ }
+ 
+ static void msg_queue_insert(struct udevd_uevent_msg *msg)
+ {
+-	char filename[PATH_SIZE];
+-	int fd;
+-
+-	msg->queue_time = time(NULL);
+-
+-	export_event_state(msg, EVENT_QUEUED);
+-	info("seq %llu queued, '%s' '%s'\n", msg->seqnum, msg->action, msg->subsystem);
+-
+-	strlcpy(filename, udev_root, sizeof(filename));
+-	strlcat(filename, "/" EVENT_SEQNUM, sizeof(filename));
+-	fd = open(filename, O_WRONLY|O_TRUNC|O_CREAT, 0644);
+-	if (fd >= 0) {
+-		char str[32];
+-		int len;
+-
+-		len = sprintf(str, "%llu\n", msg->seqnum);
+-		write(fd, str, len);
+-		close(fd);
+-	}
+-
+-	/* run one event after the other in debug mode */
+-	if (debug_trace) {
+-		list_add_tail(&msg->node, &running_list);
+-		udev_event_run(msg);
+-		waitpid(msg->pid, NULL, 0);
+-		msg_queue_delete(msg);
+-		return;
+-	}
+-
+-	/* run all events with a timeout set immediately */
+-	if (msg->timeout != 0) {
+-		list_add_tail(&msg->node, &running_list);
+-		udev_event_run(msg);
+-		return;
+-	}
+-
+-	list_add_tail(&msg->node, &exec_list);
+-	run_exec_q = 1;
++  // Don't be smart or efficient: just predictable
++  udev_event_run(msg);
++  return;
+ }
+ 
+ static int mem_size_mb(void)

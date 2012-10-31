@@ -1,0 +1,55 @@
+(add-to-list 'load-path "/Users/danny/sfw/lib/erlang/lib/tools-2.6.6.2/emacs")
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Simple property lists store the details of available lisp implementations.
+;; The idea is simple: 'inferior-lisp-program has a property, 'installed-lisps,
+;; that is a list of symbols.  Each symbol specifies a Lisp dialect.
+;; By default, the program invoked is just the string version of the symbol.
+;; This assumes that the executable is the same name as the dialect, and is
+;; available on the default PATH.
+;; If you need to specify an alternate program name, specify the 'program
+;; property on the symbol describing the dialect itself (e.g. 'sbcl)
+;;
+;; e.g. (put 'inferior-lisp-program 'installed-lisps '(sbcl))
+;;      (put 'sbcl 'program "/usr/local/bin/sbcl")
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(put 'inferior-lisp-program 'installed-lisps '(sbcl clisp))
+(put 'sbcl 'program "/Users/danny/sfw/bin/sbcl")
+
+(setq djw-clojure-jar-path "/Users/danny/SandBox/clojure/trunk/clojure.jar"
+      djw-clojure-extra-classpaths
+      (list "/Users/danny/Clojure/clojure/clojure.jar"
+	    "/Users/danny/Clojure/clojure-contrib/clojure-contrib.jar"))
+
+(setenv "SBCL_HOME" "/Users/danny/sfw/lib/sbcl/")
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;; Recent Mac builds of Emacs have the ns-toggle-fullscreen function, which
+;; (as the name implies) enables real fullscreen capabilities
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(when (functionp #'ns-toggle-fullscreen)
+  (defvar *djw-fullscreen* nil)
+  (defvar *djw-toggle-fullscreen-command* (cond ((eq *operating-system* :mac) #'ns-toggle-fullscreen)))
+  (defvar *djw-original-modeline-background* (face-background 'modeline))
+  (defvar *djw-original-modeline-foreground* (face-foreground 'modeline))
+  (defun djw-enable-fullscreen ()
+    (interactive)
+    (if (not *djw-fullscreen*)
+      (djw-toggle-fullscreen)))
+  (defun djw-disable-fullscreen ()
+    (interactive)
+    (if *djw-fullscreen*
+      (djw-toggle-fullscreen)))
+  (defun djw-toggle-fullscreen ()
+    (interactive)
+    (funcall *djw-toggle-fullscreen-command*)
+    (setf *djw-fullscreen* (not *djw-fullscreen*))
+    (set-face-background 'modeline (if *djw-fullscreen* "black" *djw-original-modeline-background*))
+    (set-face-foreground 'modeline (if *djw-fullscreen* "grey20" *djw-original-modeline-foreground*))
+    (scroll-bar-mode (if *djw-fullscreen* -1 1))))
+
+(add-to-list 'load-path "/Users/danny/SandBox/go/misc/emacs")
+(autoload 'go-mode "go-mode" "Major mode for Go code" t)
+(add-to-list 'auto-mode-alist '("\\.go$" . go-mode))

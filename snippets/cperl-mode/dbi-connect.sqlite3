@@ -1,0 +1,6 @@
+# name: dbi (SQLite)
+# key: dbi-connect
+# --
+use DBD::SQLite;
+my $dbh = DBI->connect("dbi:SQLite:dbname=${1:path-to-db-file}") || die $!;
+$0
